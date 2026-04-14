@@ -1,0 +1,41 @@
+const crypto = require('crypto');
+const axios = require('axios');
+
+const API_KEY = "T3dw468ukWMAXSD4M4drskbiQKbdUEs2A8Xofz+U0Sg=";
+const API_SECRET_HEX = "308204bc020100300d06092a864886f70d0101010500048204a6308204a20201000282010100c3da9004d68ab4901310faf9fd27cf936900c4d4dc9409ce732ab98964712096184c945d2b29e7043b33e558c7d8e63bd0f31514681870036c1e0de03658be6e0fafba8b28164255ad6af874b5bf0594ba9b29f88ca5806dac91d2eda5cad95719313ecf00249fcbf861c49fa169ee3009ab0ae5fdca314b72d68a51093da13bd7816232be60f73d84f92a534795ac475591fb2eacbb5d05339dca7347134dbdf3eb818c754bc43d16be6fa990a332c608cc1dab8c6b22000489ac7c459d4ed77bf2cd945a2637a6844a1a1b10ea1a2b2e55a15e7049cd4ae002bd8c90802b0f56186057e8fee053276ee42ea5ce480f166f8699b710fe294bbb26af6471b9cf020301000102820100515b1f7b1b01a82ab6f8d54076040d0a6f5245f124258c83493cc4b0895c22cca6905d0aecacadcd88a8308b760ca7eace0bc3c463cf4eec6503810113a23e8c6a90b53d2bec3f26e6f02a00152521f4dba52bc496ec02d2cc1e110fedd03b031eb061a64c296a85a88a384a951af339da3246472e6ac89a4e3c475d8d28a02a08efd5bb972fa6987102b396e8bbe018b4942e5ea2faa8d71af298fc2f260a504f4e581e62b2431be09a910c0e625dfcdd38dd46ffb54bca41f5e07c789a5694a84172ef553f1c174cab420cd2afc7452fb91e7e447622ca7a2704219e9b382d7625f27e12ccc0a578cb89ec5c430a0bfdf5120ec1c7b75a8e437efe3be71c5d02818100e583611439d6015bd2ade6f1f684e7eff330e03e240c776a464bbbde8755a050c579ca199a41779a90542f494f74b56162a8cf3eebf54ded242b8b3bf230aa0cc5434ee9d2eb7ff5a539f88a70427d9c16d6fea85278d82bbf8030964bb6985c23f55b67d03c987631925b57a4d7a47579b36e931e32cb24558fadd43b1357a502818100da74c41bed84a111bf813868e5ccd9cb848195fce9188ed23a257860f63e0864de131571fe02cfa9f3b1fd8c4140bab8b5f9e8259c531898f9856b365b702648e3748bd8edc59b2ba6f842068ad2bf181a561e3378dcfa49af06e2a9294c20357e8c03a9da7d590bd1bcbe54267e8ad237a8bc7f3f53a645c537fb316e7b71630281802167ed0267a4a98ff6eb4ef91afb9f52c29ff393b7e584a018593fa0152cb667eb465dcf3a2f9b3c0913e7ca10e198e0f2de4544104e252886223c62de4e8d01ccd88e2ce481589fa58bf98c14e8e8a586818691736799774ca958e9175e1d7113decb8e21b6202edbea44974e2c0109044cc4a46f39cf6d9b728d479dcda3ed0281804864a59073b79e00d9aba2dbf03b60797721d2688b7e5de600eae5e78bf2a6a976867076e42c5e50fdb72044d862f0fdc1205df408c7e8c0d8ff83b5f1bb4a94a0fbc05455074512c43444fd120820d785f2bff362bc281d3ee95337a7bdd876a1c71877b33612ca3de90451b2a800ad0550df96738feeebf41d471aec77efed02818064bb8d9d247c4de20bc7f96aab57e64e457fd4674f891095cb96f7eaf210b54b9365277b53865f5befa42bcece872d327ebbf88c1ef7a269fd884fb99f0f11f44f09a80a9f5a65cafc97def830c161ed9e96c4374012347d7496c52d0d72c4530342b9d2eaaefa5bf905cf5f570e29055e20fcc9ed26b588f87740942897bb19";
+
+const privateKeyDer = Buffer.from(API_SECRET_HEX, 'hex');
+const privateKey = crypto.createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs1' });
+
+async function sanityCheck() {
+    const data = {
+        jsonrpc: "2.0",
+        method: "getExchangeAmount",
+        params: [{ from: "btc", to: "usdt", amountFrom: "1" }],
+        id: "final_sanity_check"
+    };
+
+    const sign = crypto.createSign('SHA256');
+    sign.update(JSON.stringify(data));
+    const signature = sign.sign(privateKey, 'base64');
+
+    try {
+        const response = await axios.post("https://api.changelly.com/v2", data, {
+            headers: { "Content-Type": "application/json", "X-Api-Key": API_KEY, "X-Api-Signature": signature }
+        });
+
+        console.log("\n📡 --- SERVER RESPONSE ---");
+        // Print the full result list to see the structure
+        const result = response.data.result;
+        console.log(JSON.stringify(result, null, 2));
+
+        if (result && result.length > 0) {
+            console.log(`\n✅ Success! 1 BTC is: ${result[0].amountTo} USDT`);
+        } else {
+            console.log("\n⚠️ Auth worked, but no rate was returned for this pair.");
+        }
+    } catch (err) {
+        console.log("❌ CONNECTION ERROR:", err.message);
+    }
+}
+sanityCheck();

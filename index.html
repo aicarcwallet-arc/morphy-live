@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUBIC TAP MINE | PRODUCTION</title>
+    <style>
+        :root { --neon: #00f2ff; --bg: #050505; --panel: #111; }
+        body { background: var(--bg); color: #fff; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        
+        .stats { position: absolute; top: 20px; width: 90%; display: flex; justify-content: space-around; font-size: 11px; color: var(--neon); letter-spacing: 1px; }
+        
+        /* THE TAP CIRCLE */
+        .mine-circle { width: 240px; height: 240px; border-radius: 50%; border: 4px solid var(--neon); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s; box-shadow: 0 0 40px rgba(0, 242, 255, 0.15); user-select: none; position: relative; }
+        .mine-circle:active { transform: scale(0.95); background: rgba(0, 242, 255, 0.1); }
+        .mine-circle::after { content: ''; position: absolute; width: 110%; height: 110%; border-radius: 50%; border: 1px solid rgba(0, 242, 255, 0.2); animation: pulse 2s infinite; }
+        
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
+
+        .taps-left { font-size: 64px; font-weight: bold; text-shadow: 0 0 20px var(--neon); }
+        .label { font-size: 10px; letter-spacing: 3px; color: #666; margin-bottom: 5px; }
+
+        /* THE BANK AREA */
+        .bank-container { margin-top: 50px; text-align: center; width: 300px; }
+        .bank-balance { font-size: 28px; color: #00ff88; margin-bottom: 15px; font-weight: bold; }
+        
+        .withdraw-btn { background: #00ff88; color: #000; border: none; padding: 18px 0; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; display: none; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; }
+        .withdraw-btn:hover { background: #fff; box-shadow: 0 0 20px #00ff88; }
+        .withdraw-btn:disabled { background: #222; color: #444; cursor: not-allowed; }
+
+        #status { font-size: 11px; margin-top: 15px; color: #444; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+    <div class="stats">
+        <div>NETWORK: QUBIC_PROD</div>
+        <div>SESSION: ONLINE</div>
+        <div>SWAP: USDC_ENABLED</div>
+    </div>
+
+    <div class="mine-circle" id="tapArea">
+        <div class="label">TAPS REMAINING</div>
+        <div class="taps-left" id="tapCount">10</div>
+    </div>
+
+    <div class="bank-container">
+        <div class="label">QUBIC BANK TOTAL</div>
+        <div class="bank-balance"><span id="qubicBalance">0</span> QUBIC</div>
+        
+        <button class="withdraw-btn" id="withdrawBtn">WITHDRAW & SWAP USDC</button>
+        <div id="status">INITIATING MINER...</div>
+    </div>
+
+    <script>
+        let taps = 10;
+        let bank = 0;
+        // This targets your AWS engine exactly
+        const AWS_URL = "http://3.139.60.228:3000"; 
+
+        const tapArea = document.getElementById('tapArea');
+        const tapCount = document.getElementById('tapCount');
+        const qubicBalance = document.getElementById('qubicBalance');
+        const withdrawBtn = document.getElementById('withdrawBtn');
+        const status = document.getElementById('status');
+
+        // Logic for the 10-tap mining cycle
+        tapArea.addEventListener('click', () => {
+            if (taps > 0) {
+                taps--;
+                tapCount.innerText = taps;
+                status.innerText = "MINING IN PROGRESS...";
+                
+                if (taps === 0) {
+                    bank += 5000; // Mining reward
+                    qubicBalance.innerText = bank.toLocaleString();
+                    withdrawBtn.style.display = 'block';
+                    status.innerText = "CYCLE COMPLETE: REWARDS BANKED";
+                    tapArea.style.borderColor = "#333";
+                    tapArea.style.pointerEvents = "none";
+                }
+            }
+        });
+
+        // Logic for Withdrawal to AWS & DEX Swap
+        withdrawBtn.addEventListener('click', async () => {
+            withdrawBtn.disabled = true;
+            status.innerText = "CONNECTING TO AWS ENGINE...";
+            
+            try {
+                const res = await fetch(`${AWS_URL}/withdraw`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        amount: bank,
+                        asset: "QUBIC"
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    status.innerHTML = `<span style="color:#00ff88">SUCCESS: TX ${data.hash.substring(0,10)}... SWAPPED TO USDC</span>`;
+                    bank = 0;
+                    qubicBalance.innerText = "0";
+                    withdrawBtn.style.display = 'none';
+                    
+                    // Reset game for next round
+                    setTimeout(() => {
+                        taps = 10;
+                        tapCount.innerText = "10";
+                        tapArea.style.borderColor = "#00f2ff";
+                        tapArea.style.pointerEvents = "auto";
+                        status.innerText = "READY FOR NEXT CYCLE";
+                    }, 5000);
+                }
+            } catch (err) {
+                status.innerHTML = `<span style="color:#ff4444">ERROR: AWS ENGINE OFFLINE (PORT 3000)</span>`;
+                withdrawBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
